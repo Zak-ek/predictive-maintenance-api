@@ -1,0 +1,45 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Kør tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout kode
+      uses: actions/checkout@v4
+    
+    - name: Opsæt Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Installer dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Kør tests
+      run: python -m pytest tests/ -v
+      env:
+        DB_HOST: localhost
+        DB_PORT: 3306
+        DB_NAME: test_db
+        DB_USER: root
+        DB_PASSWORD: testpassword
+
+  build:
+    name: Byg Docker image
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout kode
+      uses: actions/checkout@v4
+    
+    - name: Byg Docker image
+      run: docker build -t predictive-maintenance-api .
