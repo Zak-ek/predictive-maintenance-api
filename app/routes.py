@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.database import db
 from app.models import SensorReading, Anomaly
 from app.logic import check_threshold, validate_sensor_data
+from app.charger import Charger
 from datetime import datetime
 
 api = Blueprint('api', __name__)
@@ -99,4 +100,68 @@ def get_anomalies():
     return jsonify({
         'count': len(anomalies),
         'anomalies': [a.to_dict() for a in anomalies]
+    }), 200
+
+# ============================================================
+# Endpoint der bruger Charger Aggregate (DDD)
+# ============================================================
+# Dette endpoint demonstrerer brugen af Charger-aggregatet.
+# I stedet for at lade routes/logic håndtere forretningslogikken,
+# delegerer vi til Charger-objektet, som ejer reglerne.
+
+@api.route('/chargers/<device_id>/evaluate', methods=['POST'])
+def evaluate_charger_reading(device_id):
+    """
+    Modtag en sensor-måling, og lad Charger-aggregatet vurdere
+    om målingen er en anomali. Aggregatet styrer selv sin status.
+    """
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Ingen JSON data modtaget'}), 400
+
+    # Valider input
+    is_valid, error_message = validate_sensor_data(data)
+    if not is_valid:
+        return jsonify({'error': error_message}), 400
+
+    # Opret Charger-aggregat (in-memory for denne request)
+    charger = Charger(device_id=device_id, location=data.get('location'))
+
+    # Lad aggregatet håndtere måling + anomali-detektion
+    reading, severity = charger.add_reading(
+        sensor_type=data['sensor_type'],
+        value=float(data['value']),
+        unit=data.get('unit'),
+    )
+
+    # Persistér via eksisterende SensorReading-model
+    db_reading = SensorReading(
+        device_id=device_id,
+        sensor_type=data['sensor_type'],
+        value=float(data['value']),
+        unit=data.get('unit'),
+        status=severity,
+    )
+    db.session.add(db_reading)
+    db.session.commit()
+
+    # Hvis aggregatet registrerede en anomali, persistér den også
+    if charger.has_anomalies():
+        latest_anomaly = charger.anomalies[-1]
+        db_anomaly = Anomaly(
+            sensor_reading_id=db_reading.id,
+            device_id=device_id,
+            sensor_type=latest_anomaly['sensor_type'],
+            value=latest_anomaly['value'],
+            severity=latest_anomaly['severity'],
+            message=f"Charger {device_id} reported {latest_anomaly['severity']} level",
+        )
+        db.session.add(db_anomaly)
+        db.session.commit()
+
+    return jsonify({
+        'charger': charger.to_dict(),
+        'reading_severity': severity,
+        'is_anomaly': severity != Charger.STATUS_HEALTHY,
     }), 200
