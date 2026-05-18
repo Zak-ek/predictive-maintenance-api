@@ -30,7 +30,7 @@ jobs:
         DB_PORT: 3306
         DB_NAME: test_db
         DB_USER: root
-        DB_PASSWORD: testpassword
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
   build:
     name: Byg Docker image

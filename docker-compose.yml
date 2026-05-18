@@ -5,7 +5,7 @@ services:
     image: mysql:8.0
     container_name: pm_database
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: predictive_maintenance
     ports:
       - "3306:3306"
@@ -27,7 +27,7 @@ services:
       DB_PORT: 3306
       DB_NAME: predictive_maintenance
       DB_USER: root
-      DB_PASSWORD: rootpassword
+      DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
